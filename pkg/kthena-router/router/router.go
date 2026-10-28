@@ -1473,10 +1473,13 @@ func doRequest(
 		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 	}
 	// update-@author fudongyang @ai-authored workbuddy-Claude @date 2026-10-26 23:30:00
-	// 4xx 属于请求侧/鉴权类错误（如后端 --api-key 校验失败、prompt 超长、限流），
-	// 换一个 Pod 重试结果相同，且原实现会把状态码吞成 503、丢失后端错误信息。
-	// 因此 4xx 不视为转发失败，交由上层按正常响应透传给客户端，保留原始状态码与响应体。
-	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+	// 请求侧/鉴权类 4xx（401/403/400/413 等）换 Pod 重试结果相同，且原实现会把状态码吞成 503、
+	// 丢失后端错误信息，因此不视为转发失败，交由上层按正常响应透传给客户端，保留原始状态码与响应体。
+	// 404 与 429 例外：Pod 上可能未加载当前请求的 LoRA adapter（404）或处于 Pod 级限流（429），
+	// 换一个 Pod 重试可能成功，保持原有的"视为转发失败并重试下一 Pod"语义。
+	var passThrough4xx = resp.StatusCode >= 400 && resp.StatusCode < 500 &&
+		resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusTooManyRequests
+	if passThrough4xx {
 		return resp, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
