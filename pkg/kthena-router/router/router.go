@@ -1472,6 +1472,13 @@ func doRequest(
 	if timeout > 0 {
 		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 	}
+	// update-@author fudongyang @ai-authored workbuddy-Claude @date 2026-10-26 23:30:00
+	// 4xx 属于请求侧/鉴权类错误（如后端 --api-key 校验失败、prompt 超长、限流），
+	// 换一个 Pod 重试结果相同，且原实现会把状态码吞成 503、丢失后端错误信息。
+	// 因此 4xx 不视为转发失败，交由上层按正常响应透传给客户端，保留原始状态码与响应体。
+	if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+		return resp, nil
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return resp, fmt.Errorf("http resp error, http code is %d", resp.StatusCode)
 	}

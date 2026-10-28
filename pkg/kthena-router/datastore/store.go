@@ -1634,6 +1634,16 @@ func (s *store) selectRule(modelName string, req *http.Request, rules []*aiv1alp
 		headersMatched := true
 		for key, sm := range rule.ModelMatch.Headers {
 			reqValue := req.Header.Get(key)
+			// update-@author fudongyang @ai-authored workbuddy-Claude @date 2026-10-27 16:00:00
+			// Go's net/http moves the Host header out of req.Header and exposes it as req.Host,
+			// so req.Header.Get("Host") is always empty and Host based modelMatch would never match.
+			// Fall back to req.Host (and then X-Forwarded-Host) to support Host/authority based routing.
+			if strings.EqualFold(key, "Host") && reqValue == "" {
+				reqValue = req.Host
+				if reqValue == "" {
+					reqValue = req.Header.Get("X-Forwarded-Host")
+				}
+			}
 			if !s.matchString(sm, reqValue) {
 				headersMatched = false
 				break
