@@ -3752,8 +3752,8 @@ func TestDoRequestTimeoutDoesNotTruncateSlowStream(t *testing.T) {
 //     so the proxy retry loop must keep trying the remaining pods.
 func TestDoRequest4xxPassThroughAndRetrySemantics(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
+		name            string
+		statusCode      int
 		wantPassThrough bool
 	}{
 		{name: "BadRequestPassesThrough", statusCode: http.StatusBadRequest, wantPassThrough: true},
