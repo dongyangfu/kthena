@@ -3744,12 +3744,15 @@ func TestDoRequestTimeoutDoesNotTruncateSlowStream(t *testing.T) {
 
 // TestDoRequest4xxPassThroughAndRetrySemantics verifies the per-status-code
 // forwarding semantics of doRequest:
-//   - request-side 4xx (401/403/400/413...) is returned to the caller as a
-//     normal response so the original status code and error body reach the
-//     client instead of being swallowed into a synthetic 503;
-//   - 404 and 429 still surface as forwarding errors, because another pod may
-//     serve the requested LoRA adapter (404) or not be rate-limited (429),
-//     so the proxy retry loop must keep trying the remaining pods.
+//   - the explicit allowlist of request-side 4xx (400/401/403/413/422) is
+//     returned to the caller as a normal response so the original status code
+//     and error body reach the client instead of being swallowed into a
+//     synthetic 503;
+//   - every other non-2xx status, including unknown 4xx codes such as
+//     404/409/421/425/429, still surfaces as a forwarding error: which status
+//     code an engine uses for pod-local conditions (e.g. an adapter not loaded
+//     on that pod) is engine-specific, so the proxy retry loop must keep
+//     trying the remaining pods.
 func TestDoRequest4xxPassThroughAndRetrySemantics(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -3763,6 +3766,10 @@ func TestDoRequest4xxPassThroughAndRetrySemantics(t *testing.T) {
 		{name: "UnprocessableEntityPassesThrough", statusCode: http.StatusUnprocessableEntity, wantPassThrough: true},
 		{name: "NotFoundRetriesNextPod", statusCode: http.StatusNotFound, wantPassThrough: false},
 		{name: "TooManyRequestsRetriesNextPod", statusCode: http.StatusTooManyRequests, wantPassThrough: false},
+		{name: "ConflictRetriesNextPod", statusCode: http.StatusConflict, wantPassThrough: false},
+		{name: "RequestTimeoutRetriesNextPod", statusCode: http.StatusRequestTimeout, wantPassThrough: false},
+		{name: "MisdirectedRequestRetriesNextPod", statusCode: http.StatusMisdirectedRequest, wantPassThrough: false},
+		{name: "TooEarlyRetriesNextPod", statusCode: http.StatusTooEarly, wantPassThrough: false},
 		{name: "ServiceUnavailableRetriesNextPod", statusCode: http.StatusServiceUnavailable, wantPassThrough: false},
 		{name: "OKIsNormalResponse", statusCode: http.StatusOK, wantPassThrough: true},
 	}

@@ -1472,16 +1472,19 @@ func doRequest(
 	if timeout > 0 {
 		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 	}
-	// Request-side 4xx errors (400/401/403/413 etc.) cannot be fixed by retrying
-	// another pod, and the old behaviour swallowed the backend status code into
-	// a synthetic 503 and lost the error body. Treat them as normal responses so
+	// Request-side 4xx errors cannot be fixed by retrying another pod, and the
+	// old behaviour swallowed the backend status code into a synthetic 503 and
+	// lost the error body. Treat this explicit allowlist as normal responses so
 	// the original status code and body are passed through to the client.
-	// 404 and 429 are exceptions: the pod may not have the requested LoRA
-	// adapter loaded (404) or may be pod-level rate limited (429), and retrying
-	// another pod can succeed, so they keep the original forwarding-error
-	// semantics that let the proxy retry the remaining pods.
-	var passThrough4xx = resp.StatusCode >= 400 && resp.StatusCode < 500 &&
-		resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusTooManyRequests
+	// Unknown 4xx codes keep the existing forwarding-error semantics: which
+	// status code an engine uses for pod-local conditions (e.g. an adapter not
+	// loaded on that pod) is engine-specific, so the proxy retry loop must stay
+	// in charge of recovering by trying the remaining pods.
+	var passThrough4xx = resp.StatusCode == http.StatusBadRequest ||
+		resp.StatusCode == http.StatusUnauthorized ||
+		resp.StatusCode == http.StatusForbidden ||
+		resp.StatusCode == http.StatusRequestEntityTooLarge ||
+		resp.StatusCode == http.StatusUnprocessableEntity
 	if passThrough4xx {
 		return resp, nil
 	}
