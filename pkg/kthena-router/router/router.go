@@ -1472,11 +1472,14 @@ func doRequest(
 	if timeout > 0 {
 		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
 	}
-	// update-@author fudongyang @ai-authored workbuddy-Claude @date 2026-10-26 23:30:00
-	// 请求侧/鉴权类 4xx（401/403/400/413 等）换 Pod 重试结果相同，且原实现会把状态码吞成 503、
-	// 丢失后端错误信息，因此不视为转发失败，交由上层按正常响应透传给客户端，保留原始状态码与响应体。
-	// 404 与 429 例外：Pod 上可能未加载当前请求的 LoRA adapter（404）或处于 Pod 级限流（429），
-	// 换一个 Pod 重试可能成功，保持原有的"视为转发失败并重试下一 Pod"语义。
+	// Request-side 4xx errors (400/401/403/413 etc.) cannot be fixed by retrying
+	// another pod, and the old behaviour swallowed the backend status code into
+	// a synthetic 503 and lost the error body. Treat them as normal responses so
+	// the original status code and body are passed through to the client.
+	// 404 and 429 are exceptions: the pod may not have the requested LoRA
+	// adapter loaded (404) or may be pod-level rate limited (429), and retrying
+	// another pod can succeed, so they keep the original forwarding-error
+	// semantics that let the proxy retry the remaining pods.
 	var passThrough4xx = resp.StatusCode >= 400 && resp.StatusCode < 500 &&
 		resp.StatusCode != http.StatusNotFound && resp.StatusCode != http.StatusTooManyRequests
 	if passThrough4xx {
