@@ -825,12 +825,12 @@ func TestPrefillerProxy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	tests := []struct {
-		name            string
-		statusCode      int
-		responseBody    string
-		expectError     bool
-		nonRetryable    bool
-		errorContains   string
+		name          string
+		statusCode    int
+		responseBody  string
+		expectError   bool
+		nonRetryable  bool
+		errorContains string
 	}{
 		{
 			name:         "successful prefill request",
